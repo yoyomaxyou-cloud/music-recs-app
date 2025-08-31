@@ -2,8 +2,8 @@
 
 import streamlit as st
 import openai
+from openai import RateLimitError
 import time
-from openai.error import RateLimitError
 
 # --- Настройка API ключа ---
 openai.api_key = st.secrets["OPENAI_API_KEY"]  # или просто "YOUR_API_KEY" для локальной разработки
