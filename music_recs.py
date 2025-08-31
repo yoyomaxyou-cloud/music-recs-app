@@ -45,4 +45,6 @@ if st.button("Получить рекомендации"):
         st.error("Пожалуйста, укажите хотя бы одну песню или исполнителя.")
     else:
         with st.spinner("Генерируем рекомендации..."):
-            recs = get_recommendations(user_items, categories, cont
+            recs = get_recommendations(user_items, categories, context, max_recs)
+        st.success("Готово!")
+        st.text_area("Рекомендации:", recs, height=200)
