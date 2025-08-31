@@ -1,47 +1,53 @@
 import streamlit as st
 from openai import OpenAI
 
-# Клиент OpenAI, ключ берём из Streamlit Secrets
+# Создаём клиента OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-def get_recommendations(track_list, max_recs=50):
-    """
-    Получает рекомендации на основе списка треков.
-    track_list: строка с треками, по одному на строку
-    max_recs: количество рекомендаций
-    """
-    prompt = f"""У меня есть список моих любимых треков:
-{track_list}
+# Функция для получения рекомендаций
+def get_recommendations(tracks, max_recs=10):
+    prompt = f"""
+    У меня есть список любимых треков:
+    {tracks}
 
-Предложи {max_recs} новых треков, которые мне могут понравиться. 
-Выводи каждый трек с новой строки, формат: Исполнитель - Название трека"""
-    
+    На основе этого списка порекомендуй {max_recs} похожих треков. 
+    Форматируй список нумерованно.
+    """
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=1500
+        temperature=0.8,
     )
-    
-    recommendations = response.choices[0].message.content.strip()
-    return recommendations
+    return response.choices[0].message.content
 
-# --- Streamlit UI ---
-st.title("🎵 Музыкальные рекомендации на основе твоих треков")
-st.write("Вставь список любимых треков (по одному на строку).")
+# Заголовок приложения
+st.title("🎶 AI Музыкальные рекомендации")
 
-user_tracks = st.text_area("Твои треки", height=200, placeholder="Например:\nEminem - Lose Yourself\nThe Weeknd - Blinding Lights\n...")
-max_recs = st.slider("Сколько рекомендаций показывать?", 10, 100, 50)
+# Поле для ввода треков
+tracks = st.text_area("Вставь свой список любимых треков:")
 
-if st.button("Получить рекомендации"):
-    if user_tracks.strip() == "":
-        st.warning("Сначала введи список треков!")
+# Инициализация session_state
+if "recs" not in st.session_state:
+    st.session_state.recs = []
+
+# Кнопка "Сгенерировать"
+if st.button("Сгенерировать рекомендации"):
+    if tracks.strip():
+        recs = get_recommendations(tracks, max_recs=15)
+        st.session_state.recs = [recs]  # заменяем старые рекомендации на новые
     else:
-        recs = get_recommendations(user_tracks, max_recs=max_recs)
-        st.subheader("✨ Вот, что тебе может понравиться:")
-        st.text(recs)
+        st.warning("Пожалуйста, вставь хотя бы один трек!")
 
-        if st.button("Хочу ещё"):
-            user_tracks += "\n" + recs
-            recs_more = get_recommendations(user_tracks, max_recs=max_recs)
-            st.subheader("🎶 Дополнительные рекомендации:")
-            st.text(recs_more)
+# Кнопка "Хочу ещё"
+if st.button("Хочу ещё"):
+    if tracks.strip():
+        more_recs = get_recommendations(tracks, max_recs=15)
+        st.session_state.recs.append(more_recs)  # добавляем новые рекомендации
+    else:
+        st.warning("Сначала вставь список треков и нажми 'Сгенерировать'")
+
+# Отображение всех списков рекомендаций
+for i, block in enumerate(st.session_state.recs, 1):
+    st.subheader(f"Рекомендации #{i}")
+    st.write(block)
+
