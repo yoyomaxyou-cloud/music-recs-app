@@ -1,56 +1,80 @@
 import streamlit as st
 import openai
+import pandas as pd
 
-# --- Настройка API ключа ---
+# Получаем API ключ из секретов Streamlit
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# --- Функция получения рекомендаций ---
-def get_recommendations(items_list, category="Музыка", max_recs=20):
-    """
-    Получает рекомендации через ChatGPT на основе введенного списка и категории.
-    """
-    prompt = f"""
-Ты эксперт в {category}. 
-Вот список интересов пользователя:
-{items_list}
-
-Дай {max_recs} рекомендаций, похожих на вышеуказанные, в виде маркированного списка с короткой подписью (название + описание).
-Не повторяй элементы из исходного списка.
-"""
-    try:
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        text = response.choices[0].message.content
-        # Разделение на пункты, если GPT дал маркированный список
-        recs = [line.strip("-• ").strip() for line in text.splitlines() if line.strip()]
-        return recs
-    except Exception as e:
-        st.error(f"Ошибка при генерации рекомендаций: {e}")
-        return []
-
-# --- Интерфейс Streamlit ---
-st.set_page_config(page_title="Умные Рекомендации", layout="wide")
-st.title("🎯 Умные Рекомендации от ИИ")
-st.write("Получай персонализированные рекомендации по музыке, фильмам, играм, сериалам и любым интересам!")
-
-# --- Ввод от пользователя ---
-category = st.selectbox("Выберите категорию", ["Музыка", "Фильмы", "Сериалы", "Игры", "Книги", "Прочее"])
-items_input = st.text_area("Введите список любимых треков, фильмов или игр (через запятую или с новой строки)")
-
-max_recs = st.slider("Сколько рекомендаций показать сразу?", min_value=5, max_value=50, value=15)
-
+# Инициализация сессии
 if "history" not in st.session_state:
     st.session_state.history = []
 
-if st.button("Получить рекомендации") and items_input.strip():
-    with st.spinner("Генерируем рекомендации..."):
-        recs = get_recommendations(items_input, category, max_recs)
-        st.session_state.history = recs
-        for r in recs:
-            st.markdown(f"- {r}")
+st.title("🌟 Универсальный генератор рекомендаций")
 
-if st.button("Хочу ещё") and st.session_state.history:
-    with st.spinner("Ищем дополнительные рекомендации..."):
-       more_recs = get_recommendations(", ".join(st.session_state.history), category, max_recs)
+# Ввод данных пользователем
+st.subheader("Что тебе интересно?")
+categories = st.multiselect(
+    "Выбери категории для рекомендаций",
+    ["Музыка", "Фильмы", "Сериалы", "Игры", "Книги", "Подкасты"]
+)
+
+context = st.text_input("Добавь настроение/жанр/контекст (например: бодрое для тренировки)")
+
+user_items = st.text_area(
+    "Введи свои любимые объекты (через запятую)", 
+    placeholder="Например: Inception, Dark Souls, Stranger Things, Queen - Bohemian Rhapsody"
+)
+
+def get_recommendations(items, categories, context, max_recs=15):
+    prompt = f"""
+Ты — эксперт по рекомендациям. У пользователя следующие любимые объекты: {items}.
+Он хочет рекомендации в категориях: {', '.join(categories)}.
+Контекст/настроение/цель: {context}.
+Составь список максимум {max_recs} рекомендаций по этим категориям. 
+Дай рекомендации в формате: Категория: Название - краткий комментарий.
+Не повторяй объекты пользователя.
+"""
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.8
+    )
+    text = response.choices[0].message.content
+    recs = [line.strip() for line in text.split("\n") if line.strip()]
+    return recs
+
+# Генерация новых рекомендаций
+if st.button("Получить рекомендации"):
+    if not categories or not user_items:
+        st.warning("Выберите категории и введите хотя бы один объект.")
+    else:
+        recs = get_recommendations(user_items, categories, context)
+        st.session_state.history.extend(recs)
+        st.success("Готово! Вот твои рекомендации:")
+        for r in recs:
+            st.write(r)
+
+# Кнопка "Хочу ещё"
+if st.button("Хочу ещё"):
+    if not st.session_state.history:
+        st.warning("Сначала получи первоначальные рекомендации.")
+    else:
+        more_recs = get_recommendations(
+            ", ".join(user_items.split(",")),
+            categories,
+            context + " (исключая предыдущие рекомендации: " + ", ".join(st.session_state.history) + ")",
+            max_recs=10
+        )
+        st.session_state.history.extend(more_recs)
+        for r in more_recs:
+            st.write(r)
+
+# Скачивание всех рекомендаций
+if st.session_state.history:
+    df = pd.DataFrame({"Рекомендации": st.session_state.history})
+    st.download_button(
+        "Скачать все рекомендации",
+        df.to_csv(index=False, sep=";").encode("utf-8"),
+        "recommendations.csv",
+        "text/csv"
+    )
