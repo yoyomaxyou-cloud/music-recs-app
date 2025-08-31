@@ -53,4 +53,4 @@ if st.button("Получить рекомендации") and items_input.strip(
 
 if st.button("Хочу ещё") and st.session_state.history:
     with st.spinner("Ищем дополнительные рекомендации..."):
-        more_recs = get_recommendations(", ".join(st.session_st_
+       more_recs = get_recommendations(", ".join(st.session_state.history), category, max_recs)
